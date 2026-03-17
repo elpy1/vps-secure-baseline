@@ -11,6 +11,87 @@
   ansible.builtin.command: "{{ sshd_binary_path }} -t"
   changed_when: false
 
+- name: Refuse to disable SSH passwords without file-backed keys
+  when:
+    - not sshd_password_authentication | bool
+    - not sshd_skip_authorized_keys_check | bool
+  block:
+    - name: Ensure SSH access preflight has users to check
+      ansible.builtin.assert:
+        that:
+          - sshd_authorized_keys_check_users | length > 0
+        fail_msg: >-
+          Refusing to disable SSH password authentication because there are no
+          users configured for the authorized_keys preflight. Set ansible_user
+          or sshd_authorized_keys_check_users, or set
+          sshd_skip_authorized_keys_check=true if you use external SSH auth.
+
+    - name: Resolve home directories for SSH access preflight users
+      ansible.builtin.command: "getent passwd {{ item }}"
+      loop: "{{ sshd_authorized_keys_check_users }}"
+      register: sshd_authorized_keys_passwd
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse to continue when a checked SSH user does not exist
+      ansible.builtin.assert:
+        that:
+          - item.rc == 0
+        fail_msg: >-
+          Refusing to disable SSH password authentication because the checked
+          user {{ item.item }} does not exist on the host. Adjust
+          sshd_authorized_keys_check_users or set
+          sshd_skip_authorized_keys_check=true if you use external SSH auth.
+      loop: "{{ sshd_authorized_keys_passwd.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Initialize SSH access preflight targets
+      ansible.builtin.set_fact:
+        sshd_authorized_keys_targets: []
+
+    - name: Build SSH access preflight targets
+      ansible.builtin.set_fact:
+        sshd_authorized_keys_targets: >-
+          {{
+            sshd_authorized_keys_targets + [
+              {
+                'user': item.item,
+                'path': ((item.stdout.split(':'))[5]) ~ '/.ssh/authorized_keys'
+              }
+            ]
+          }}
+      loop: "{{ sshd_authorized_keys_passwd.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Check authorized_keys files for SSH access preflight users
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      loop: "{{ sshd_authorized_keys_targets }}"
+      loop_control:
+        label: "{{ item.user }}"
+      register: sshd_authorized_keys_files
+
+    - name: Refuse to disable SSH passwords when no authorized_keys file is present
+      ansible.builtin.assert:
+        that:
+          - >-
+            (
+              sshd_authorized_keys_files.results
+              | selectattr('stat.exists')
+              | selectattr('stat.isreg')
+              | selectattr('stat.size', 'gt', 0)
+              | list
+              | length
+            ) > 0
+        fail_msg: >-
+          Refusing to disable SSH password authentication because none of the
+          checked users ({{ sshd_authorized_keys_check_users | join(', ') }})
+          has a non-empty authorized_keys file. Add a public key first, set
+          sshd_password_authentication=true for this host, or set
+          sshd_skip_authorized_keys_check=true if you use external SSH auth.
+
 - name: Manage sshd baseline drop-in safely
   block:
     - name: Install sshd baseline drop-in

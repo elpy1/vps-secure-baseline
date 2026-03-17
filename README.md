@@ -109,4 +109,5 @@ established host if you have not reviewed and adapted the variables first.
 - On older RHEL-family images, the initial package sync may erase obsolete legacy packages such as `network-scripts` so the host can move to the current package set cleanly.
 - On RHEL-family hosts, the baseline ensures `NetworkManager` is installed and enabled before that initial package sync.
 - SSH password auth is disabled by default, so ensure key-based access is working before applying it.
+- The SSH role refuses to disable password auth unless one of the checked users has a non-empty `authorized_keys` file. By default it checks `ansible_user`; override `sshd_authorized_keys_check_users` or set `sshd_skip_authorized_keys_check: true` if you rely on external SSH auth such as `AuthorizedKeysCommand` or SSH certificates.
 - On RHEL-family hosts, EPEL is enabled by default because `fail2ban` is commonly sourced from it.
