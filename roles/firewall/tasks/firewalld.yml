@@ -1,4 +1,20 @@
 ---
+- name: Assert supported firewalld incoming policy
+  ansible.builtin.assert:
+    that:
+      - firewall_default_incoming_policy in firewall_firewalld_target_map
+    fail_msg: >-
+      firewalld supports firewall_default_incoming_policy values of
+      allow, deny, or reject.
+
+- name: Assert supported firewalld outgoing policy
+  ansible.builtin.assert:
+    that:
+      - firewall_default_outgoing_policy == 'allow'
+    fail_msg: >-
+      The firewalld backend currently supports
+      firewall_default_outgoing_policy=allow only.
+
 - name: Install firewalld
   ansible.builtin.package:
     name: firewalld
@@ -10,6 +26,51 @@
     enabled: true
     state: started
 
+- name: Ensure firewalld zone exists
+  ansible.posix.firewalld:
+    zone: "{{ firewall_firewalld_zone }}"
+    state: present
+    permanent: true
+  register: firewall_firewalld_zone_result
+
+- name: Reload firewalld after zone creation
+  ansible.builtin.systemd_service:
+    name: firewalld
+    state: reloaded
+  when: firewall_firewalld_zone_result.changed
+
+- name: Set firewalld zone target
+  ansible.posix.firewalld:
+    zone: "{{ firewall_firewalld_zone }}"
+    target: "{{ firewall_firewalld_zone_target }}"
+    state: present
+    permanent: true
+  register: firewall_firewalld_target_result
+
+- name: Reload firewalld after zone target update
+  ansible.builtin.systemd_service:
+    name: firewalld
+    state: reloaded
+  when: firewall_firewalld_target_result.changed
+
+- name: Attach active interfaces to firewalld zone
+  ansible.posix.firewalld:
+    interface: "{{ item }}"
+    zone: "{{ firewall_firewalld_zone }}"
+    state: enabled
+    permanent: true
+    immediate: true
+  loop: "{{ firewall_firewalld_interfaces }}"
+
+- name: Allow services with firewalld
+  ansible.posix.firewalld:
+    service: "{{ item }}"
+    zone: "{{ firewall_firewalld_zone }}"
+    state: enabled
+    permanent: true
+    immediate: true
+  loop: "{{ firewall_firewalld_allowed_services }}"
+
 - name: Allow TCP ports with firewalld
   ansible.posix.firewalld:
     port: "{{ item }}/tcp"
@@ -17,8 +78,7 @@
     state: enabled
     permanent: true
     immediate: true
-  loop: "{{ firewall_allowed_tcp_ports }}"
-  notify: Reload firewalld
+  loop: "{{ firewall_effective_tcp_ports }}"
 
 - name: Allow UDP ports with firewalld
   ansible.posix.firewalld:
@@ -27,5 +87,63 @@
     state: enabled
     permanent: true
     immediate: true
-  loop: "{{ firewall_allowed_udp_ports }}"
-  notify: Reload firewalld
+  loop: "{{ firewall_effective_udp_ports }}"
+
+- name: Read configured firewalld ports
+  ansible.builtin.command:
+    argv:
+      - firewall-cmd
+      - --permanent
+      - "--zone={{ firewall_firewalld_zone }}"
+      - --list-ports
+  register: firewall_firewalld_configured_ports
+  changed_when: false
+
+- name: Read configured firewalld services
+  ansible.builtin.command:
+    argv:
+      - firewall-cmd
+      - --permanent
+      - "--zone={{ firewall_firewalld_zone }}"
+      - --list-services
+  register: firewall_firewalld_configured_services
+  changed_when: false
+
+- name: Compute desired firewalld ports
+  ansible.builtin.set_fact:
+    firewall_firewalld_desired_ports: >-
+      {{
+        (firewall_effective_tcp_ports | map('regex_replace', '$', '/tcp') | list)
+        + (firewall_effective_udp_ports | map('regex_replace', '$', '/udp') | list)
+      }}
+
+- name: Compute stale firewalld rules
+  ansible.builtin.set_fact:
+    firewall_firewalld_stale_ports: >-
+      {{
+        firewall_firewalld_configured_ports.stdout.split()
+        | difference(firewall_firewalld_desired_ports)
+      }}
+    firewall_firewalld_stale_services: >-
+      {{
+        firewall_firewalld_configured_services.stdout.split()
+        | difference(firewall_firewalld_allowed_services)
+      }}
+
+- name: Remove stale ports from firewalld zone
+  ansible.posix.firewalld:
+    port: "{{ item }}"
+    zone: "{{ firewall_firewalld_zone }}"
+    state: disabled
+    permanent: true
+    immediate: true
+  loop: "{{ firewall_firewalld_stale_ports }}"
+
+- name: Remove stale services from firewalld zone
+  ansible.posix.firewalld:
+    service: "{{ item }}"
+    zone: "{{ firewall_firewalld_zone }}"
+    state: disabled
+    permanent: true
+    immediate: true
+  loop: "{{ firewall_firewalld_stale_services }}"

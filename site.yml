@@ -1,6 +1,6 @@
 ---
 - name: Apply secure VPS baseline
-  hosts: all
+  hosts: vps
   become: true
   gather_facts: true
 
@@ -15,13 +15,45 @@
         fail_msg: >-
           This baseline supports RHEL-family 9+, Debian 12+, and Ubuntu 22.04+.
 
+    - name: Resolve current SSH connection port
+      ansible.builtin.set_fact:
+        sshd_current_connection_port: >-
+          {{
+            (
+              ansible_port
+              | default(ansible_ssh_port | default(22))
+            ) | string
+          }}
+
+    - name: Build transitional firewall port set for SSH changes
+      ansible.builtin.set_fact:
+        firewall_transition_tcp_ports: >-
+          {{
+            (firewall_allowed_tcp_ports + [sshd_current_connection_port])
+            | map('string')
+            | unique
+            | list
+          }}
+        firewall_transition_remove_tcp_ports: >-
+          {{
+            []
+            if sshd_current_connection_port
+            in (firewall_allowed_tcp_ports | map('string') | list)
+            else [sshd_current_connection_port]
+          }}
+
   roles:
     - role: base
     - role: time_sync
     - role: zram
       when: zram_enabled | bool
     - role: firewall
+      vars:
+        firewall_effective_tcp_ports: "{{ firewall_transition_tcp_ports }}"
     - role: sshd_config
+    - role: firewall
+      vars:
+        firewall_remove_tcp_ports: "{{ firewall_transition_remove_tcp_ports }}"
     - role: fail2ban
     - role: automatic_updates
       when: automatic_updates_enabled | bool

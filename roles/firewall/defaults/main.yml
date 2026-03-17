@@ -1,3 +1,35 @@
 ---
 firewall_backend: "{{ 'firewalld' if ansible_facts['os_family'] == 'RedHat' else 'ufw' }}"
+firewall_effective_tcp_ports: "{{ firewall_allowed_tcp_ports | map('string') | unique | list }}"
+firewall_effective_udp_ports: "{{ firewall_allowed_udp_ports | map('string') | unique | list }}"
+firewall_remove_tcp_ports: []
+firewall_remove_udp_ports: []
+firewall_allowed_services: []
 firewall_firewalld_zone: public
+firewall_firewalld_interfaces: >-
+  {{
+    [
+      ansible_facts.get('default_ipv4', {}).get('interface', ''),
+      ansible_facts.get('default_ipv6', {}).get('interface', '')
+    ]
+    | reject('equalto', '')
+    | unique
+    | list
+  }}
+firewall_firewalld_required_services: >-
+  {{
+    ['dhcpv6-client']
+    if ansible_facts.get('default_ipv6', {}).get('interface', '') | length > 0
+    else []
+  }}
+firewall_firewalld_allowed_services: >-
+  {{
+    (firewall_allowed_services + firewall_firewalld_required_services)
+    | unique
+    | list
+  }}
+firewall_firewalld_target_map:
+  allow: ACCEPT
+  deny: DROP
+  reject: '%%REJECT%%'
+firewall_firewalld_zone_target: "{{ firewall_firewalld_target_map[firewall_default_incoming_policy] }}"

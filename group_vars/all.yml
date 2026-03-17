@@ -57,6 +57,7 @@ sshd_x11_forwarding: false
 firewall_allowed_tcp_ports:
   - "{{ sshd_port }}"
 firewall_allowed_udp_ports: []
+firewall_allowed_services: []
 firewall_default_incoming_policy: deny
 firewall_default_outgoing_policy: allow
 
