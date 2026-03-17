@@ -124,7 +124,7 @@ established host if you have not reviewed and adapted the variables first.
 ## Notes
 
 - The playbook runs with `become: true` by default, but it can also be used during bootstrap as `root` with `ansible_become: false`.
-- Installed distro packages are upgraded by default after the initial firewall/SSH safety steps and time synchronization checks, but before the remaining baseline config is applied. Disable `base_upgrade_installed_packages` if you need to manage package upgrades separately.
+- Installed distro packages are upgraded on every playbook run while `base_upgrade_installed_packages: true`, after the initial firewall/SSH safety steps and time synchronization checks but before the remaining baseline config is applied. Disable it if you need to manage package upgrades separately.
 - Debian-family automatic updates are explicitly limited to security origins. On Ubuntu, this can leave some security-related updates pending if they require new dependencies from the non-security release pocket.
 - On older RHEL-family images, the initial package sync may erase obsolete legacy packages such as `network-scripts` so the host can move to the current package set cleanly.
 - On RHEL-family hosts, the baseline ensures `NetworkManager` is installed and enabled before that initial package sync.
@@ -133,6 +133,7 @@ established host if you have not reviewed and adapted the variables first.
 - When changing `sshd_port`, the play asserts the final firewall policy permits that port, temporarily keeps the current Ansible SSH port open, reconnects Ansible on the new port, and only then removes the transitional port allowance.
 - On Debian-family systemd hosts, the SSH role disables `ssh.socket` and manages `ssh.service` directly so `sshd_port` changes are authoritative even on images that default to socket activation.
 - On SELinux-enabled RHEL-family hosts, non-default SSH ports are added to the SELinux `ssh_port_t` policy, and only the last custom SSH SELinux port previously managed by this repo is removed again when `sshd_port` changes.
+- `zram_enabled` and `automatic_updates_enabled` currently control whether those roles run on future plays. Setting them to `false` does not remove zram or automatic update configuration that a previous run already applied.
 - SSH password auth is disabled by default, so ensure key-based access is working before applying it.
 - The SSH role refuses to disable password auth unless one of the checked users has a non-empty `authorized_keys` file. By default it checks `ansible_user`; override `sshd_authorized_keys_check_users` or set `sshd_skip_authorized_keys_check: true` if you rely on external SSH auth such as `AuthorizedKeysCommand` or SSH certificates.
 - On RHEL-family hosts, EPEL is enabled by default because `fail2ban` is commonly sourced from it.
@@ -143,8 +144,9 @@ If the current controller-to-host SSH port is not already represented by
 `ansible_port`, set `sshd_current_connection_port_override` explicitly for the
 first port-change run.
 
-When host key verification is enabled, review the new-port host key rather than
-blindly trusting it:
+When host key verification is enabled, expect the first connection to the new
+port to be treated as a separate `known_hosts` entry. Review the new-port host
+key rather than blindly trusting it:
 
 ```bash
 ssh-keygen -F "[203.0.113.10]:2222"
