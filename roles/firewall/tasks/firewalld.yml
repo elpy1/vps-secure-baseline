@@ -1,0 +1,31 @@
+---
+- name: Install firewalld
+  ansible.builtin.package:
+    name: firewalld
+    state: present
+
+- name: Enable and start firewalld
+  ansible.builtin.systemd_service:
+    name: firewalld
+    enabled: true
+    state: started
+
+- name: Allow TCP ports with firewalld
+  ansible.posix.firewalld:
+    port: "{{ item }}/tcp"
+    zone: "{{ firewall_firewalld_zone }}"
+    state: enabled
+    permanent: true
+    immediate: true
+  loop: "{{ firewall_allowed_tcp_ports }}"
+  notify: Reload firewalld
+
+- name: Allow UDP ports with firewalld
+  ansible.posix.firewalld:
+    port: "{{ item }}/udp"
+    zone: "{{ firewall_firewalld_zone }}"
+    state: enabled
+    permanent: true
+    immediate: true
+  loop: "{{ firewall_allowed_udp_ports }}"
+  notify: Reload firewalld

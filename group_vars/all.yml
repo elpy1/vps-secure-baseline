@@ -1,0 +1,68 @@
+---
+baseline_hostname: null
+
+base_manage_package_repos: true
+base_redhat_enable_epel: true
+base_upgrade_installed_packages: true
+base_swappiness: 10
+
+base_packages_common:
+  - bash-completion
+  - ca-certificates
+  - curl
+  - git
+  - htop
+  - jq
+  - logrotate
+  - lsof
+  - make
+  - ncdu
+  - openssl
+  - psmisc
+  - python3
+  - rsync
+  - screen
+  - strace
+  - sysstat
+  - time
+  - tmux
+  - tree
+  - unzip
+  - wget
+
+base_packages_family_overrides:
+  RedHat:
+    - bind-utils
+    - dnf-plugins-core
+    - ethtool
+    - net-tools
+    - nmap
+    - vim-enhanced
+  Debian:
+    - dnsutils
+    - ethtool
+    - net-tools
+    - nmap
+    - vim
+
+sshd_password_authentication: false
+sshd_permit_root_login: prohibit-password
+sshd_port: 22
+sshd_allow_tcp_forwarding: true
+sshd_x11_forwarding: false
+
+firewall_allowed_tcp_ports:
+  - "{{ sshd_port }}"
+firewall_allowed_udp_ports: []
+firewall_default_incoming_policy: deny
+firewall_default_outgoing_policy: allow
+
+fail2ban_bantime: 1h
+fail2ban_findtime: 10m
+fail2ban_maxretry: 5
+
+automatic_updates_enabled: true
+automatic_updates_reboot: false
+
+zram_enabled: true
+zram_fraction: 0.5

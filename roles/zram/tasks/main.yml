@@ -1,0 +1,24 @@
+---
+- name: Install zram generator package
+  ansible.builtin.package:
+    name: "{{ zram_package_name }}"
+    state: present
+
+- name: Ensure zram generator drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/zram-generator.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure zram generator
+  ansible.builtin.template:
+    src: zram-generator.conf.j2
+    dest: "{{ zram_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart systemd-zram-setup

@@ -1,0 +1,26 @@
+---
+- name: Apply secure VPS baseline
+  hosts: all
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Assert supported operating system
+      ansible.builtin.assert:
+        that:
+          - >
+            (ansible_facts['os_family'] == 'RedHat' and (ansible_facts['distribution_major_version'] | int) >= 9)
+            or (ansible_facts['distribution'] == 'Debian' and (ansible_facts['distribution_major_version'] | int) >= 12)
+            or (ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] is version('22.04', '>='))
+        fail_msg: >-
+          This baseline supports RHEL-family 9+, Debian 12+, and Ubuntu 22.04+.
+
+  roles:
+    - role: base
+    - role: zram
+      when: zram_enabled | bool
+    - role: firewall
+    - role: sshd_config
+    - role: fail2ban
+    - role: automatic_updates
+      when: automatic_updates_enabled | bool

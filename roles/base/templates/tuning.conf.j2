@@ -1,0 +1,20 @@
+# conservative general tuning for internet-facing web/app VPS hosts
+
+# zram is enabled by default for smaller VPS instances, so keep swap
+# available as a safety valve without making it aggressive.
+vm.swappiness = {{ base_swappiness }}
+
+# raise file descriptor ceilings for web servers, runtimes, and databases
+fs.nr_open = 1048576
+fs.file-max = 1048576
+
+# faster detection of dead NATed or upstream connections
+net.ipv4.tcp_keepalive_time = 60
+net.ipv4.tcp_keepalive_intvl = 10
+net.ipv4.tcp_keepalive_probes = 6
+
+# widen the ephemeral port range for outbound fanout
+net.ipv4.ip_local_port_range = 8192 65535
+
+# allow a larger pending SYN queue on busy internet-facing hosts
+net.ipv4.tcp_max_syn_backlog = 4096

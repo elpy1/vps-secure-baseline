@@ -1,0 +1,12 @@
+---
+base_hostname: "{{ baseline_hostname }}"
+base_manage_package_repos: true
+base_redhat_enable_epel: true
+base_upgrade_installed_packages: true
+base_journald_storage: persistent
+base_swappiness: 10
+base_packages: >-
+  {{
+    base_packages_common
+    + base_packages_family_overrides.get(ansible_facts['os_family'], [])
+  }}

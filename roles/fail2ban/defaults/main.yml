@@ -1,0 +1,2 @@
+---
+fail2ban_config_path: /etc/fail2ban/jail.d/sshd.local

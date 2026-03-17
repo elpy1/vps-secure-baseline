@@ -1,0 +1,64 @@
+---
+- name: Ensure sshd drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Validate existing sshd installation and config
+  ansible.builtin.command: "{{ sshd_binary_path }} -t"
+  changed_when: false
+
+- name: Manage sshd baseline drop-in safely
+  block:
+    - name: Install sshd baseline drop-in
+      ansible.builtin.template:
+        src: baseline.conf.j2
+        dest: "{{ sshd_config_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      register: sshd_dropin_result
+
+    - name: Validate updated sshd configuration
+      ansible.builtin.command: "{{ sshd_binary_path }} -t"
+      changed_when: false
+      when: sshd_dropin_result.changed
+
+  rescue:
+    - name: Restore previous sshd drop-in from backup
+      ansible.builtin.copy:
+        src: "{{ sshd_dropin_result.backup_file }}"
+        dest: "{{ sshd_config_path }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+      when:
+        - sshd_dropin_result is defined
+        - sshd_dropin_result.backup_file is defined
+
+    - name: Remove invalid sshd drop-in when no backup exists
+      ansible.builtin.file:
+        path: "{{ sshd_config_path }}"
+        state: absent
+      when:
+        - sshd_dropin_result is defined
+        - sshd_dropin_result.backup_file is not defined
+
+    - name: Stop after restoring previous sshd configuration
+      ansible.builtin.fail:
+        msg: >-
+          Refused to keep the new sshd drop-in because validation failed.
+          The previous drop-in has been restored.
+
+- name: Reload sshd
+  ansible.builtin.systemd_service:
+    name: "{{ sshd_service_name }}"
+    state: reloaded
+  when:
+    - sshd_dropin_result is defined
+    - sshd_dropin_result.changed

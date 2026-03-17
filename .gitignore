@@ -1,0 +1,13 @@
+# Local inventory overrides
+inventory/hosts.local.yml
+
+# Ansible runtime artifacts
+.ansible/
+*.retry
+
+# Python cache
+__pycache__/
+
+# Editor and OS cruft
+*.swp
+.DS_Store

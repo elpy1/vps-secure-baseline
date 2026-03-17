@@ -1,0 +1,3 @@
+---
+- name: Include automatic updates backend tasks
+  ansible.builtin.include_tasks: "{{ automatic_updates_backend }}.yml"

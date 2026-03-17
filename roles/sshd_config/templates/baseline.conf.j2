@@ -1,0 +1,7 @@
+Port {{ sshd_port }}
+PasswordAuthentication {{ 'yes' if sshd_password_authentication | bool else 'no' }}
+KbdInteractiveAuthentication no
+PermitRootLogin {{ sshd_permit_root_login }}
+UseDNS no
+AllowTcpForwarding {{ 'yes' if sshd_allow_tcp_forwarding | bool else 'no' }}
+X11Forwarding {{ 'yes' if sshd_x11_forwarding | bool else 'no' }}

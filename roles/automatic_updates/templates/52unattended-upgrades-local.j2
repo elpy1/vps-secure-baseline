@@ -1,0 +1,2 @@
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+Unattended-Upgrade::Automatic-Reboot "{{ 'true' if automatic_updates_reboot | bool else 'false' }}";
