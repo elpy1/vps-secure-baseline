@@ -10,6 +10,7 @@ The playbook applies a small, distro-aware baseline:
 
 - baseline admin packages
 - upgrade installed distro packages on first run
+- distro-native NTP/time synchronization with an explicit synchronization check
 - persistent journald storage and split sysctl tuning/security drop-ins
 - SSH hardening with a managed `sshd_config.d` drop-in
 - `firewalld` on RHEL-family hosts and `ufw` on Debian-family hosts
@@ -83,6 +84,10 @@ established host if you have not reviewed and adapted the variables first.
    for small web/app VPS instances. For DB-heavy hosts, consider
    disabling `zram` or lowering `base_swappiness`.
 
+   Time synchronization is enforced as part of the baseline. Increase
+   `time_sync_wait_retries` or `time_sync_wait_delay` if your provider's
+   NTP service typically takes longer to report synchronized.
+
 4. Run the baseline:
 
    ```bash
@@ -108,6 +113,7 @@ established host if you have not reviewed and adapted the variables first.
 - Debian-family automatic updates are explicitly limited to security origins. On Ubuntu, this can leave some security-related updates pending if they require new dependencies from the non-security release pocket.
 - On older RHEL-family images, the initial package sync may erase obsolete legacy packages such as `network-scripts` so the host can move to the current package set cleanly.
 - On RHEL-family hosts, the baseline ensures `NetworkManager` is installed and enabled before that initial package sync.
+- Time synchronization is managed explicitly and must report synchronized before the play continues. The baseline uses `chrony` on RHEL-family hosts and `systemd-timesyncd` on Debian-family hosts.
 - SSH password auth is disabled by default, so ensure key-based access is working before applying it.
 - The SSH role refuses to disable password auth unless one of the checked users has a non-empty `authorized_keys` file. By default it checks `ansible_user`; override `sshd_authorized_keys_check_users` or set `sshd_skip_authorized_keys_check: true` if you rely on external SSH auth such as `AuthorizedKeysCommand` or SSH certificates.
 - On RHEL-family hosts, EPEL is enabled by default because `fail2ban` is commonly sourced from it.

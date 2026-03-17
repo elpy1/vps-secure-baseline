@@ -17,6 +17,7 @@
 
   roles:
     - role: base
+    - role: time_sync
     - role: zram
       when: zram_enabled | bool
     - role: firewall

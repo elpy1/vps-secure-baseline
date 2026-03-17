@@ -1,0 +1,36 @@
+---
+- name: Ensure time synchronization package is installed
+  ansible.builtin.package:
+    name: "{{ time_sync_package_name }}"
+    state: present
+
+- name: Ensure time synchronization service is enabled and running
+  ansible.builtin.systemd_service:
+    name: "{{ time_sync_service_name }}"
+    enabled: true
+    state: started
+
+- name: Wait for time synchronization to become active
+  ansible.builtin.command:
+    argv:
+      - timedatectl
+      - show
+      - "--property={{ time_sync_status_property }}"
+      - --value
+  register: time_sync_status
+  changed_when: false
+  failed_when: false
+  retries: "{{ time_sync_wait_retries }}"
+  delay: "{{ time_sync_wait_delay }}"
+  until: time_sync_status.stdout | trim == 'yes'
+
+- name: Assert time synchronization is active
+  ansible.builtin.assert:
+    that:
+      - time_sync_status.stdout | trim == 'yes'
+    fail_msg: >-
+      {{ time_sync_service_name }} is enabled and running, but the host did not
+      report active network time synchronization within
+      {{ (time_sync_wait_retries | int) * (time_sync_wait_delay | int) }}
+      seconds. Check outbound NTP reachability and any provider-specific time
+      source restrictions.
