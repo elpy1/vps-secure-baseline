@@ -14,7 +14,7 @@ The playbook applies a small, distro-aware baseline:
 - distro-native NTP/time synchronization with an explicit synchronization check
 - persistent journald storage and split sysctl tuning/security drop-ins
 - SSH hardening with a managed `sshd_config.d` drop-in
-- `firewalld` on RHEL-family hosts and `ufw` on Debian-family hosts
+- `firewalld` on Rocky Linux / AlmaLinux hosts and `ufw` on Debian-family hosts
 - `fail2ban`
 - automatic security updates with `dnf-automatic` or `unattended-upgrades`
 - zram via the distro-native generator package
@@ -83,7 +83,7 @@ established host if you have not reviewed and adapted the variables first.
    application ports you need to `firewall_allowed_tcp_ports` or
    `firewall_allowed_udp_ports`.
 
-   On RHEL-family hosts, the `firewalld` backend also supports
+   On Rocky Linux / AlmaLinux hosts, the `firewalld` backend also supports
    `firewall_allowed_services` for named firewalld services.
    On Debian-family hosts, `firewall_allowed_services` is not supported.
 
@@ -91,7 +91,11 @@ established host if you have not reviewed and adapted the variables first.
    when the desired policies, allowed port lists, or managed IPv6 setting
    change so removed ports are converged too. By default it also manages
    `/etc/default/ufw` `IPV6=` explicitly based on detected default IPv6
-   connectivity; override `firewall_ufw_ipv6` if needed.
+   connectivity; override `firewall_ufw_ipv6` if needed. It currently
+   requires `firewall_default_outgoing_policy: allow`, because the baseline
+   does not yet manage explicit outbound allow rules. When the managed UFW
+   ruleset changes, the rebuild path uses `ufw reset` and then reapplies the
+   desired rules.
 
    The baseline keeps `zram` enabled with a moderate `base_swappiness`
    for small web/app VPS instances. For DB-heavy hosts, consider
@@ -126,17 +130,17 @@ established host if you have not reviewed and adapted the variables first.
 - The playbook runs with `become: true` by default, but it can also be used during bootstrap as `root` with `ansible_become: false`.
 - Installed distro packages are upgraded on every playbook run while `base_upgrade_installed_packages: true`, after the initial firewall/SSH safety steps and time synchronization checks but before the remaining baseline config is applied. Disable it if you need to manage package upgrades separately.
 - Debian-family automatic updates are explicitly limited to security origins. On Ubuntu, this can leave some security-related updates pending if they require new dependencies from the non-security release pocket.
-- On older RHEL-family images, the initial package sync may erase obsolete legacy packages such as `network-scripts` so the host can move to the current package set cleanly.
-- On RHEL-family hosts, the baseline ensures `NetworkManager` is installed and enabled before that initial package sync.
-- On RHEL-family hosts, the firewall role reconciles the selected firewalld zone more explicitly: it requires an explicit interface binding target, manages the zone target, removes stale ports/services from that zone, reloads firewalld to collapse runtime-only drift, and currently requires `firewall_default_outgoing_policy: allow`.
-- Time synchronization is managed explicitly and must report synchronized before the play continues. The baseline uses `chrony` on RHEL-family hosts and `systemd-timesyncd` on Debian-family hosts.
+- On older Rocky Linux / AlmaLinux images, the initial package sync may erase obsolete legacy packages such as `network-scripts` so the host can move to the current package set cleanly.
+- On Rocky Linux / AlmaLinux hosts, the baseline ensures `NetworkManager` is installed and enabled before that initial package sync.
+- On Rocky Linux / AlmaLinux hosts, the firewall role reconciles the selected firewalld zone more explicitly: it requires an explicit interface binding target, manages the zone target, removes stale ports/services from that zone, reloads firewalld to collapse runtime-only drift, and currently requires `firewall_default_outgoing_policy: allow`.
+- Time synchronization is managed explicitly and must report synchronized before the play continues. The baseline uses `chrony` on Rocky Linux / AlmaLinux hosts and `systemd-timesyncd` on Debian-family hosts.
 - When changing `sshd_port`, the play asserts the final firewall policy permits that port, temporarily keeps the current Ansible SSH port open, reconnects Ansible on the new port, and only then removes the transitional port allowance.
 - On Debian-family systemd hosts, the SSH role disables `ssh.socket` and manages `ssh.service` directly so `sshd_port` changes are authoritative even on images that default to socket activation.
-- On SELinux-enabled RHEL-family hosts, non-default SSH ports are added to the SELinux `ssh_port_t` policy, and only the last custom SSH SELinux port previously managed by this repo is removed again when `sshd_port` changes.
+- On SELinux-enabled Rocky Linux / AlmaLinux hosts, non-default SSH ports are added to the SELinux `ssh_port_t` policy, and only the last custom SSH SELinux port previously managed by this repo is removed again when `sshd_port` changes.
 - `zram_enabled` and `automatic_updates_enabled` currently control whether those roles run on future plays. Setting them to `false` does not remove zram or automatic update configuration that a previous run already applied.
 - SSH password auth is disabled by default, so ensure key-based access is working before applying it.
 - The SSH role refuses to disable password auth unless one of the checked users has a non-empty `authorized_keys` file. By default it checks `ansible_user`; override `sshd_authorized_keys_check_users` or set `sshd_skip_authorized_keys_check: true` if you rely on external SSH auth such as `AuthorizedKeysCommand` or SSH certificates.
-- On RHEL-family hosts, EPEL is enabled by default because `fail2ban` is commonly sourced from it.
+- On Rocky Linux / AlmaLinux hosts, EPEL is enabled by default because `fail2ban` is commonly sourced from it.
 
 ## SSH Port Changes
 

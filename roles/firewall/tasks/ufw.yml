@@ -8,6 +8,15 @@
       On ufw hosts, use firewall_allowed_tcp_ports and
       firewall_allowed_udp_ports.
 
+- name: Assert supported ufw outgoing policy
+  ansible.builtin.assert:
+    that:
+      - firewall_default_outgoing_policy == 'allow'
+    fail_msg: >-
+      The ufw backend currently supports firewall_default_outgoing_policy=allow
+      only. The baseline does not yet manage explicit outbound allow rules for
+      later time sync or package activity.
+
 - name: Install ufw
   ansible.builtin.package:
     name: ufw
@@ -18,6 +27,7 @@
     path: /etc/default/ufw
     regexp: '^IPV6='
     line: "IPV6={{ 'yes' if firewall_ufw_ipv6 | bool else 'no' }}"
+    create: true
     owner: root
     group: root
     mode: "0644"
