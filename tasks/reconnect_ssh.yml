@@ -1,0 +1,13 @@
+- name: Update Ansible SSH connection variables
+  ansible.builtin.set_fact:
+    ansible_port: "{{ sshd_port | string }}"
+    ansible_ssh_port: "{{ sshd_port | string }}"
+
+- name: Reset Ansible SSH connection
+  ansible.builtin.meta: reset_connection
+
+- name: Wait for Ansible to reconnect on the configured SSH port
+  ansible.builtin.wait_for_connection:
+    timeout: 60
+    connect_timeout: 5
+    sleep: 2

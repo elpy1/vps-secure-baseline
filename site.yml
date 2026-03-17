@@ -1,6 +1,8 @@
 ---
 - name: Apply secure VPS baseline
   hosts: vps
+  serial: 1
+  any_errors_fatal: true
   become: true
   gather_facts: true
 
@@ -9,24 +11,40 @@
       ansible.builtin.assert:
         that:
           - >
-            (ansible_facts['os_family'] == 'RedHat' and (ansible_facts['distribution_major_version'] | int) >= 9)
+            (ansible_facts['distribution'] in ['Rocky', 'AlmaLinux'] and (ansible_facts['distribution_major_version'] | int) >= 9)
             or (ansible_facts['distribution'] == 'Debian' and (ansible_facts['distribution_major_version'] | int) >= 12)
             or (ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] is version('22.04', '>='))
         fail_msg: >-
-          This baseline supports RHEL-family 9+, Debian 12+, and Ubuntu 22.04+.
+          This baseline supports Rocky Linux 9+, AlmaLinux 9+, Debian 12+, and Ubuntu 22.04+.
+
+    - name: Assert final firewall policy permits the configured SSH port
+      ansible.builtin.assert:
+        that:
+          - >-
+            (sshd_port | string) in (firewall_allowed_tcp_ports | map('string') | list)
+            or (
+              ansible_facts['os_family'] == 'RedHat'
+              and (sshd_port | int) == 22
+              and 'ssh' in (firewall_allowed_services | default([], true))
+            )
+        fail_msg: >-
+          The final firewall policy does not allow sshd_port={{ sshd_port }}.
+          Add that port to firewall_allowed_tcp_ports, or for the default SSH
+          port on RHEL-family hosts allow the firewalld ssh service explicitly.
 
     - name: Resolve current SSH connection port
       ansible.builtin.set_fact:
         sshd_current_connection_port: >-
           {{
             (
-              ansible_port
-              | default(ansible_ssh_port | default(22))
+              sshd_current_connection_port_override
+              | default(ansible_port | default(ansible_ssh_port | default(22)), true)
             ) | string
           }}
 
     - name: Build transitional firewall port set for SSH changes
       ansible.builtin.set_fact:
+        sshd_reconnect_required: "{{ sshd_current_connection_port != (sshd_port | string) }}"
         firewall_transition_tcp_ports: >-
           {{
             (firewall_allowed_tcp_ports + [sshd_current_connection_port])
@@ -34,26 +52,57 @@
             | unique
             | list
           }}
-        firewall_transition_remove_tcp_ports: >-
-          {{
-            []
-            if sshd_current_connection_port
-            in (firewall_allowed_tcp_ports | map('string') | list)
-            else [sshd_current_connection_port]
-          }}
 
-  roles:
-    - role: base
-    - role: time_sync
-    - role: zram
-      when: zram_enabled | bool
-    - role: firewall
+  tasks:
+    - name: Apply base prereq role tasks
+      ansible.builtin.include_role:
+        name: base
+        tasks_from: prereqs
+
+    - name: Apply transitional firewall state before SSH changes
+      ansible.builtin.include_role:
+        name: firewall
       vars:
         firewall_effective_tcp_ports: "{{ firewall_transition_tcp_ports }}"
-    - role: sshd_config
-    - role: firewall
-      vars:
-        firewall_remove_tcp_ports: "{{ firewall_transition_remove_tcp_ports }}"
-    - role: fail2ban
-    - role: automatic_updates
+
+    - name: Apply sshd configuration role
+      ansible.builtin.include_role:
+        name: sshd_config
+
+    - name: Switch Ansible to the configured SSH port
+      ansible.builtin.include_tasks: tasks/reconnect_ssh.yml
+      when:
+        - sshd_runtime_reload_required | default(false) | bool
+        - sshd_reconnect_required | bool
+
+    - name: Apply final firewall state after SSH changes
+      ansible.builtin.include_role:
+        name: firewall
+
+    - name: Apply time sync role
+      ansible.builtin.include_role:
+        name: time_sync
+
+    - name: Apply base upgrade role tasks
+      ansible.builtin.include_role:
+        name: base
+        tasks_from: upgrade
+
+    - name: Apply base config role tasks
+      ansible.builtin.include_role:
+        name: base
+        tasks_from: config
+
+    - name: Apply zram role
+      ansible.builtin.include_role:
+        name: zram
+      when: zram_enabled | bool
+
+    - name: Apply fail2ban role
+      ansible.builtin.include_role:
+        name: fail2ban
+
+    - name: Apply automatic updates role
+      ansible.builtin.include_role:
+        name: automatic_updates
       when: automatic_updates_enabled | bool

@@ -15,6 +15,15 @@
       The firewalld backend currently supports
       firewall_default_outgoing_policy=allow only.
 
+- name: Assert firewalld has interfaces to manage
+  ansible.builtin.assert:
+    that:
+      - firewall_firewalld_interfaces | length > 0
+    fail_msg: >-
+      The firewalld backend could not determine any active interfaces to bind to
+      zone {{ firewall_firewalld_zone }}. Set firewall_firewalld_interfaces
+      explicitly for this host.
+
 - name: Install firewalld
   ansible.builtin.package:
     name: firewalld
@@ -147,3 +156,8 @@
     permanent: true
     immediate: true
   loop: "{{ firewall_firewalld_stale_services }}"
+
+- name: Reload firewalld to converge runtime state to permanent configuration
+  ansible.builtin.systemd_service:
+    name: firewalld
+    state: reloaded

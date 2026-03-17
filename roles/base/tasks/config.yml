@@ -1,0 +1,59 @@
+---
+- name: Enable EPEL on RedHat-family hosts
+  ansible.builtin.dnf:
+    name: epel-release
+    state: present
+  when:
+    - ansible_facts['os_family'] == 'RedHat'
+    - base_manage_package_repos | bool
+    - base_redhat_enable_epel | bool
+
+- name: Install baseline packages
+  ansible.builtin.package:
+    name: "{{ base_packages }}"
+    state: present
+
+- name: Install sysctl tuning drop-in
+  ansible.builtin.template:
+    dest: /etc/sysctl.d/60-tuning.conf
+    owner: root
+    group: root
+    mode: "0444"
+    src: tuning.conf.j2
+  notify: Restart systemd-sysctl
+
+- name: Install sysctl security drop-in
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/70-security.conf
+    owner: root
+    group: root
+    mode: "0444"
+    src: security.conf
+  notify: Restart systemd-sysctl
+
+- name: Install shell history profile
+  ansible.builtin.copy:
+    dest: /etc/profile.d/history.sh
+    owner: root
+    group: root
+    mode: "0444"
+    src: history.sh
+
+- name: Ensure journald drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure persistent journald storage
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/10-persistent-storage.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Journal]
+      Storage={{ base_journald_storage }}
+  notify: Restart systemd-journald

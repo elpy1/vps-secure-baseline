@@ -1,8 +1,76 @@
 ---
+- name: Refuse firewalld-style named services on ufw hosts
+  ansible.builtin.assert:
+    that:
+      - firewall_allowed_services | length == 0
+    fail_msg: >-
+      firewall_allowed_services is only supported with the firewalld backend.
+      On ufw hosts, use firewall_allowed_tcp_ports and
+      firewall_allowed_udp_ports.
+
 - name: Install ufw
   ansible.builtin.package:
     name: ufw
     state: present
+
+- name: Ensure ufw IPv6 handling is explicit
+  ansible.builtin.lineinfile:
+    path: /etc/default/ufw
+    regexp: '^IPV6='
+    line: "IPV6={{ 'yes' if firewall_ufw_ipv6 | bool else 'no' }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: firewall_ufw_ipv6_setting
+  when: firewall_ufw_manage_ipv6 | bool
+
+- name: Build desired ufw ruleset
+  ansible.builtin.set_fact:
+    firewall_ufw_desired_state:
+      default_incoming_policy: "{{ firewall_default_incoming_policy }}"
+      default_outgoing_policy: "{{ firewall_default_outgoing_policy }}"
+      tcp_ports: "{{ firewall_effective_tcp_ports | map('string') | unique | sort | list }}"
+      udp_ports: "{{ firewall_effective_udp_ports | map('string') | unique | sort | list }}"
+      ipv6_enabled: >-
+        {{
+          firewall_ufw_ipv6 | bool
+          if firewall_ufw_manage_ipv6 | bool
+          else 'unchanged'
+        }}
+
+- name: Hash desired ufw ruleset
+  ansible.builtin.set_fact:
+    firewall_ufw_desired_state_hash: >-
+      {{ firewall_ufw_desired_state | to_json | hash('sha256') }}
+
+- name: Check stored ufw ruleset fingerprint
+  ansible.builtin.stat:
+    path: "{{ firewall_ufw_state_marker_path }}"
+  register: firewall_ufw_state_marker
+
+- name: Read stored ufw ruleset fingerprint
+  ansible.builtin.slurp:
+    path: "{{ firewall_ufw_state_marker_path }}"
+  register: firewall_ufw_state_marker_content
+  when: firewall_ufw_state_marker.stat.exists
+
+- name: Determine whether ufw ruleset rebuild is required
+  ansible.builtin.set_fact:
+    firewall_ufw_rebuild_required: >-
+      {{
+        (not firewall_ufw_state_marker.stat.exists)
+        or (
+          firewall_ufw_state_marker_content.content | b64decode | trim
+          != firewall_ufw_desired_state_hash
+        )
+      }}
+
+- name: Rebuild ufw before applying the desired ruleset
+  community.general.ufw:
+    state: reset
+  when:
+    - firewall_ufw_rebuild_required | bool
+      or (firewall_ufw_ipv6_setting is defined and firewall_ufw_ipv6_setting.changed)
 
 - name: Set ufw default incoming policy
   community.general.ufw:
@@ -28,22 +96,14 @@
     proto: udp
   loop: "{{ firewall_effective_udp_ports }}"
 
-- name: Remove TCP ports no longer allowed with ufw
-  community.general.ufw:
-    rule: allow
-    delete: true
-    port: "{{ item }}"
-    proto: tcp
-  loop: "{{ firewall_remove_tcp_ports }}"
-
-- name: Remove UDP ports no longer allowed with ufw
-  community.general.ufw:
-    rule: allow
-    delete: true
-    port: "{{ item }}"
-    proto: udp
-  loop: "{{ firewall_remove_udp_ports }}"
-
 - name: Enable ufw
   community.general.ufw:
     state: enabled
+
+- name: Store ufw ruleset fingerprint
+  ansible.builtin.copy:
+    dest: "{{ firewall_ufw_state_marker_path }}"
+    content: "{{ firewall_ufw_desired_state_hash }}\n"
+    owner: root
+    group: root
+    mode: "0600"

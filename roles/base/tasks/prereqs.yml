@@ -1,0 +1,24 @@
+---
+- name: Set system hostname
+  ansible.builtin.hostname:
+    name: "{{ base_hostname }}"
+  when: base_hostname | default('', true) | length > 0
+
+- name: Refresh apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Ensure NetworkManager is installed on RedHat-family hosts
+  ansible.builtin.dnf:
+    name: NetworkManager
+    state: present
+  when: ansible_facts['os_family'] == 'RedHat'
+
+- name: Ensure NetworkManager is enabled and running on RedHat-family hosts
+  ansible.builtin.systemd_service:
+    name: NetworkManager
+    enabled: true
+    state: started
+  when: ansible_facts['os_family'] == 'RedHat'

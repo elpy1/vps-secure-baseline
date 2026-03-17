@@ -51,6 +51,7 @@ time_sync_wait_delay: 10
 sshd_password_authentication: false
 sshd_permit_root_login: prohibit-password
 sshd_port: 22
+sshd_current_connection_port_override: null
 sshd_allow_tcp_forwarding: true
 sshd_x11_forwarding: false
 

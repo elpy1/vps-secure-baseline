@@ -11,6 +11,96 @@
   ansible.builtin.command: "{{ sshd_binary_path }} -t"
   changed_when: false
 
+- name: Check whether Debian-family SSH socket activation unit exists
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - show
+      - --property=LoadState
+      - --value
+      - "{{ sshd_socket_unit_name }}"
+  register: sshd_socket_unit_state
+  changed_when: false
+  failed_when: false
+  when:
+    - ansible_facts['os_family'] == 'Debian'
+    - ansible_facts['service_mgr'] == 'systemd'
+
+- name: Ensure Debian-family SSH service is enabled and started directly
+  ansible.builtin.systemd_service:
+    name: "{{ sshd_service_name }}"
+    enabled: true
+    state: started
+  register: sshd_service_direct_result
+  when:
+    - ansible_facts['os_family'] == 'Debian'
+    - ansible_facts['service_mgr'] == 'systemd'
+    - sshd_socket_unit_state is defined
+    - sshd_socket_unit_state.rc == 0
+    - sshd_socket_unit_state.stdout | trim != 'not-found'
+
+- name: Disable Debian-family SSH socket activation when present
+  ansible.builtin.systemd_service:
+    name: "{{ sshd_socket_unit_name }}"
+    enabled: false
+    state: stopped
+  register: sshd_socket_disable_result
+  when:
+    - ansible_facts['os_family'] == 'Debian'
+    - ansible_facts['service_mgr'] == 'systemd'
+    - sshd_socket_unit_state is defined
+    - sshd_socket_unit_state.rc == 0
+    - sshd_socket_unit_state.stdout | trim != 'not-found'
+
+- name: Check for a managed SELinux SSH port marker
+  ansible.builtin.stat:
+    path: "{{ sshd_selinux_managed_port_marker_path }}"
+  register: sshd_selinux_managed_port_marker
+  when: sshd_manage_selinux_port | bool
+
+- name: Read the managed SELinux SSH port marker
+  ansible.builtin.slurp:
+    path: "{{ sshd_selinux_managed_port_marker_path }}"
+  register: sshd_selinux_managed_port_marker_content
+  when:
+    - sshd_manage_selinux_port | bool
+    - sshd_selinux_managed_port_marker.stat.exists
+
+- name: Determine the previously managed SELinux SSH port
+  ansible.builtin.set_fact:
+    sshd_selinux_previous_managed_port: >-
+      {{
+        (
+          sshd_selinux_managed_port_marker_content.content
+          | b64decode
+          | trim
+        )
+        if sshd_selinux_managed_port_marker.stat.exists
+        else ''
+      }}
+  when: sshd_manage_selinux_port | bool
+
+- name: Ensure SELinux tooling is available for managed SSH ports
+  ansible.builtin.package:
+    name: "{{ sshd_selinux_packages }}"
+    state: present
+  when:
+    - sshd_manage_selinux_port | bool
+    - >-
+      (sshd_port | int != 22)
+      or (sshd_selinux_previous_managed_port | default('', true) | length > 0)
+
+- name: Allow configured SSH port in SELinux policy
+  community.general.seport:
+    ports:
+      - "{{ sshd_port | string }}"
+    proto: tcp
+    setype: ssh_port_t
+    state: present
+  when:
+    - sshd_manage_selinux_port | bool
+    - sshd_port | int != 22
+
 - name: Refuse to disable SSH passwords without file-backed keys
   when:
     - not sshd_password_authentication | bool
@@ -136,13 +226,33 @@
           Refused to keep the new sshd drop-in because validation failed.
           The previous drop-in has been restored.
 
+- name: Determine whether sshd runtime reload is required
+  ansible.builtin.set_fact:
+    sshd_runtime_reload_required: >-
+      {{
+        (sshd_dropin_result is defined and sshd_dropin_result.changed)
+        or (
+          (
+            (sshd_service_direct_result is defined and sshd_service_direct_result.changed)
+            or (sshd_socket_disable_result is defined and sshd_socket_disable_result.changed)
+          )
+          and (
+            sshd_port | string
+            != (
+              sshd_current_connection_port
+              | default(ansible_port | default(ansible_ssh_port | default(22)))
+              | string
+            )
+          )
+        )
+      }}
+
 - name: Reload sshd
   ansible.builtin.systemd_service:
     name: "{{ sshd_service_name }}"
     state: reloaded
   when:
-    - sshd_dropin_result is defined
-    - sshd_dropin_result.changed
+    - sshd_runtime_reload_required | bool
 
 - name: Wait for sshd to listen on the configured port
   ansible.builtin.wait_for:
@@ -151,5 +261,37 @@
     state: started
     timeout: 30
   when:
-    - sshd_dropin_result is defined
-    - sshd_dropin_result.changed
+    - sshd_runtime_reload_required | bool
+
+- name: Remove stale managed SSH SELinux custom ports
+  community.general.seport:
+    ports:
+      - "{{ sshd_selinux_previous_managed_port }}"
+    proto: tcp
+    setype: ssh_port_t
+    local: true
+    state: absent
+  when:
+    - sshd_manage_selinux_port | bool
+    - sshd_selinux_previous_managed_port | default('', true) | length > 0
+    - sshd_selinux_previous_managed_port != '22'
+    - sshd_selinux_previous_managed_port != (sshd_port | string)
+
+- name: Record the managed SELinux SSH port
+  ansible.builtin.copy:
+    dest: "{{ sshd_selinux_managed_port_marker_path }}"
+    content: "{{ sshd_port | string }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - sshd_manage_selinux_port | bool
+    - sshd_port | int != 22
+
+- name: Remove the managed SELinux SSH port marker on the default port
+  ansible.builtin.file:
+    path: "{{ sshd_selinux_managed_port_marker_path }}"
+    state: absent
+  when:
+    - sshd_manage_selinux_port | bool
+    - sshd_port | int == 22

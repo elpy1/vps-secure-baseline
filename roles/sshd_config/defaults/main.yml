@@ -2,6 +2,15 @@
 sshd_binary_path: /usr/sbin/sshd
 sshd_config_path: /etc/ssh/sshd_config.d/00-baseline.conf
 sshd_service_name: "{{ 'sshd' if ansible_facts['os_family'] == 'RedHat' else 'ssh' }}"
+sshd_socket_unit_name: ssh.socket
+sshd_manage_selinux_port: >-
+  {{
+    ansible_facts['os_family'] == 'RedHat'
+    and ansible_facts.get('selinux', {}).get('status', 'disabled') == 'enabled'
+  }}
+sshd_selinux_packages:
+  - policycoreutils-python-utils
+sshd_selinux_managed_port_marker_path: /etc/ssh/.baseline-managed-selinux-port
 sshd_skip_authorized_keys_check: false
 sshd_authorized_keys_check_users: >-
   {{

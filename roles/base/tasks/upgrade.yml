@@ -1,0 +1,19 @@
+---
+- name: Upgrade installed packages on RedHat-family hosts
+  ansible.builtin.dnf:
+    allowerasing: true
+    name: "*"
+    state: latest
+    update_only: true
+    update_cache: true
+  when:
+    - ansible_facts['os_family'] == 'RedHat'
+    - base_upgrade_installed_packages | bool
+
+- name: Upgrade installed packages on Debian-family hosts
+  ansible.builtin.apt:
+    upgrade: dist
+    update_cache: true
+  when:
+    - ansible_facts['os_family'] == 'Debian'
+    - base_upgrade_installed_packages | bool
