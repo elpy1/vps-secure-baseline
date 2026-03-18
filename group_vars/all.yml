@@ -15,16 +15,14 @@ base_packages_common:
   - jq
   - logrotate
   - lsof
-  - make
   - ncdu
   - openssl
   - psmisc
   - python3
   - rsync
-  - screen
   - strace
+  - sudo
   - sysstat
-  - time
   - tmux
   - tree
   - unzip
@@ -35,14 +33,10 @@ base_packages_family_overrides:
     - bind-utils
     - dnf-plugins-core
     - ethtool
-    - net-tools
-    - nmap
     - vim-enhanced
   Debian:
     - dnsutils
     - ethtool
-    - net-tools
-    - nmap
     - vim
 
 time_sync_wait_retries: 6
