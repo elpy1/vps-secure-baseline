@@ -1,6 +1,6 @@
 # VPS secure baseline
 
-An Ansible baseline for new VPS hosts with sane hardening defaults for:
+A deliberately defensive Ansible baseline for new VPS hosts with sane hardening defaults for:
 
 - Rocky Linux 9+
 - AlmaLinux 9+
@@ -22,7 +22,7 @@ The playbook applies a small, distro-aware baseline:
 ## Scope
 
 > [!WARNING]
-> This repo is intended as a secure bootstrap baseline for new VPS servers.
+> This repo is intended as a secure bootstrap baseline for **new VPS servers**.
 
 It is not designed to be applied blindly to already-running or long-lived
 servers. By default it can perform a full package upgrade, enforce SSH policy,
@@ -84,7 +84,7 @@ established host if you have not reviewed and adapted the variables first.
    `firewall_allowed_udp_ports`.
 
    On Rocky Linux / AlmaLinux hosts, the `firewalld` backend also supports
-   `firewall_allowed_services` for named firewalld services.
+   `firewall_allowed_services` for named firewalld services (e.g. HTTPS).
    On Debian-family hosts, `firewall_allowed_services` is not supported.
 
    On Debian-family hosts, the UFW backend rebuilds the managed ruleset
@@ -93,7 +93,7 @@ established host if you have not reviewed and adapted the variables first.
    `/etc/default/ufw` `IPV6=` explicitly based on detected default IPv6
    connectivity; override `firewall_ufw_ipv6` if needed. It currently
    requires `firewall_default_outgoing_policy: allow`, because the baseline
-   does not yet manage explicit outbound allow rules. When the managed UFW
+   does not manage explicit outbound allow rules. When the managed UFW
    ruleset changes, the rebuild path uses `ufw reset` and then reapplies the
    desired rules.
 
