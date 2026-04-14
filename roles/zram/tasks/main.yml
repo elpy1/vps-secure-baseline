@@ -1,24 +1,64 @@
 ---
-- name: Install zram generator package
-  ansible.builtin.package:
-    name: "{{ zram_package_name }}"
-    state: present
+- name: Manage zram generator
+  when: zram_enabled | bool
+  block:
+    - name: Install zram generator package
+      ansible.builtin.package:
+        name: "{{ zram_package_name }}"
+        state: present
 
-- name: Ensure zram generator drop-in directory exists
-  ansible.builtin.file:
-    path: /etc/systemd/zram-generator.conf.d
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
+    - name: Ensure zram generator drop-in directory exists
+      ansible.builtin.file:
+        path: /etc/systemd/zram-generator.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
 
-- name: Configure zram generator
-  ansible.builtin.template:
-    src: zram-generator.conf.j2
-    dest: "{{ zram_config_path }}"
-    owner: root
-    group: root
-    mode: "0644"
-  notify:
-    - Reload systemd
-    - Restart systemd-zram-setup
+    - name: Configure zram generator
+      ansible.builtin.template:
+        src: zram-generator.conf.j2
+        dest: "{{ zram_config_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd
+        - Restart systemd-zram-setup
+
+- name: Remove zram generator
+  when: not zram_enabled | bool
+  block:
+    - name: Check whether managed zram setup unit exists
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - --property=LoadState
+          - --value
+          - "{{ zram_service_name }}"
+      register: zram_service_unit_state
+      changed_when: false
+      failed_when: false
+      when: ansible_facts['service_mgr'] == 'systemd'
+
+    - name: Stop managed zram setup service when present
+      ansible.builtin.systemd_service:
+        name: "{{ zram_service_name }}"
+        state: stopped
+      when:
+        - ansible_facts['service_mgr'] == 'systemd'
+        - zram_service_unit_state is defined
+        - zram_service_unit_state.rc == 0
+        - zram_service_unit_state.stdout | trim != 'not-found'
+
+    - name: Remove zram generator configuration
+      ansible.builtin.file:
+        path: "{{ zram_config_path }}"
+        state: absent
+      notify: Reload systemd
+
+    - name: Remove zram generator package
+      ansible.builtin.package:
+        name: "{{ zram_package_name }}"
+        state: absent

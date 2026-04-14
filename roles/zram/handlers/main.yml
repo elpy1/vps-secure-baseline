@@ -5,5 +5,5 @@
 
 - name: Restart systemd-zram-setup
   ansible.builtin.systemd_service:
-    name: systemd-zram-setup@zram0.service
+    name: "{{ zram_service_name }}"
     state: restarted

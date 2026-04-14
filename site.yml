@@ -96,7 +96,6 @@
     - name: Apply zram role
       ansible.builtin.include_role:
         name: zram
-      when: zram_enabled | bool
 
     - name: Apply fail2ban role
       ansible.builtin.include_role:
