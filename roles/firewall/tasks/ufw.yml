@@ -82,12 +82,12 @@
     - firewall_ufw_rebuild_required | bool
       or (firewall_ufw_ipv6_setting is defined and firewall_ufw_ipv6_setting.changed)
 
-- name: Set ufw default incoming policy
+- name: Set ufw default incoming policy # noqa args[module]
   community.general.ufw:
     direction: incoming
     policy: "{{ firewall_default_incoming_policy }}"
 
-- name: Set ufw default outgoing policy
+- name: Set ufw default outgoing policy # noqa args[module]
   community.general.ufw:
     direction: outgoing
     policy: "{{ firewall_default_outgoing_policy }}"

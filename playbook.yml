@@ -1,2 +1,3 @@
 ---
-- import_playbook: site.yml
+- name: Apply secure VPS baseline compatibility wrapper
+  import_playbook: site.yml

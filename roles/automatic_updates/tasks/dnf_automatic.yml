@@ -8,7 +8,7 @@
         state: present
 
     - name: Configure dnf-automatic to apply updates
-      ansible.builtin.ini_file:
+      community.general.ini_file:
         path: /etc/dnf/automatic.conf
         section: commands
         option: apply_updates
@@ -17,7 +17,7 @@
       notify: Restart dnf-automatic timer
 
     - name: Configure dnf-automatic to only install security updates
-      ansible.builtin.ini_file:
+      community.general.ini_file:
         path: /etc/dnf/automatic.conf
         section: commands
         option: upgrade_type
@@ -26,7 +26,7 @@
       notify: Restart dnf-automatic timer
 
     - name: Configure dnf-automatic reboot policy
-      ansible.builtin.ini_file:
+      community.general.ini_file:
         path: /etc/dnf/automatic.conf
         section: commands
         option: reboot

@@ -1,0 +1,45 @@
+---
+name: CI
+
+"on":
+  push:
+  pull_request:
+
+jobs:
+  ansible:
+    name: Ansible Checks
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Prepare CI environment paths
+        run: |
+          echo "ANSIBLE_HOME=$RUNNER_TEMP/ansible-home" >> "$GITHUB_ENV"
+          echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/ansible-collections" \
+            >> "$GITHUB_ENV"
+          echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache" >> "$GITHUB_ENV"
+
+      - name: Install CI dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r requirements.yml
+
+      - name: Run playbook syntax check
+        run: ansible-playbook --syntax-check site.yml -i inventory/hosts.yml
+
+      - name: Run ansible-lint
+        run: >-
+          ansible-lint
+          site.yml
+          playbook.yml
+          roles/
+          tasks/
+          group_vars/
+          inventory/hosts.yml

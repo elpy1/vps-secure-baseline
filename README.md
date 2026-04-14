@@ -42,10 +42,20 @@ established host if you have not reviewed and adapted the variables first.
 
 ## Usage
 
+This repo is tested with `ansible-core 2.20.3`. Treat `ansible-core 2.20`
+as the minimum supported version unless and until the repo documents
+something newer.
+
 1. Install the required collections:
 
    ```bash
    ansible-galaxy collection install -r requirements.yml
+   ```
+
+   For local lint/CI parity, install the pinned development toolchain too:
+
+   ```bash
+   pip install -r requirements-dev.txt
    ```
 
 2. Add your servers to `inventory/hosts.local.yml` or edit `inventory/hosts.yml`.
@@ -132,6 +142,16 @@ established host if you have not reviewed and adapted the variables first.
    ```bash
    ansible-playbook site.yml -l my-vps
    ```
+
+## Development
+
+To run the same checks locally that GitHub Actions runs:
+
+```bash
+ansible-galaxy collection install -r requirements.yml
+ansible-playbook --syntax-check site.yml -i inventory/hosts.yml
+ansible-lint site.yml playbook.yml roles/ tasks/ group_vars/ inventory/hosts.yml
+```
 
 ## Notes
 
