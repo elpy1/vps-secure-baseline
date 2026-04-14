@@ -104,4 +104,3 @@
     - name: Apply automatic updates role
       ansible.builtin.include_role:
         name: automatic_updates
-      when: automatic_updates_enabled | bool

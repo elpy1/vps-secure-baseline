@@ -105,6 +105,10 @@ established host if you have not reviewed and adapted the variables first.
    `zram_enabled: false` removes the managed generator config, stops the
    managed `zram0` setup, and uninstalls the generator package.
 
+   Setting `automatic_updates_enabled: false` disables the managed
+   automatic-update timers, removes the managed config, and uninstalls the
+   backend package.
+
    Time synchronization is enforced as part of the baseline. Increase
    `time_sync_wait_retries` or `time_sync_wait_delay` if your provider's
    NTP service typically takes longer to report synchronized.
@@ -143,7 +147,6 @@ established host if you have not reviewed and adapted the variables first.
 - When changing `sshd_port`, the play asserts the final firewall policy permits that port, temporarily keeps the current Ansible SSH port open, reconnects Ansible on the new port, and only then removes the transitional port allowance.
 - The SSH role explicitly enables and starts the SSH service on supported distros. On Debian-family systemd hosts, it also disables `ssh.socket` and manages `ssh.service` directly so `sshd_port` changes are authoritative even on images that default to socket activation.
 - On SELinux-enabled Rocky Linux / AlmaLinux hosts, non-default SSH ports are added to the SELinux `ssh_port_t` policy, and only the last custom SSH SELinux port previously managed by this repo is removed again when `sshd_port` changes.
-- `automatic_updates_enabled` currently controls whether that role runs on future plays. Setting it to `false` does not remove automatic update configuration that a previous run already applied.
 - SSH password auth is disabled by default, so ensure key-based access is working before applying it.
 - The SSH role refuses to disable password auth unless one of the checked users has a non-empty `authorized_keys` file. By default it checks `ansible_user`; override `sshd_authorized_keys_check_users` or set `sshd_skip_authorized_keys_check: true` if you rely on external SSH auth such as `AuthorizedKeysCommand` or SSH certificates.
 - On Rocky Linux / AlmaLinux hosts, EPEL is enabled by default because `fail2ban` is commonly sourced from it.

@@ -1,38 +1,78 @@
 ---
-- name: Install dnf-automatic
-  ansible.builtin.package:
-    name: dnf-automatic
-    state: present
+- name: Manage dnf-automatic
+  when: automatic_updates_enabled | bool
+  block:
+    - name: Install dnf-automatic
+      ansible.builtin.package:
+        name: dnf-automatic
+        state: present
 
-- name: Configure dnf-automatic to apply updates
-  ansible.builtin.ini_file:
-    path: /etc/dnf/automatic.conf
-    section: commands
-    option: apply_updates
-    value: "yes"
-    mode: "0644"
-  notify: Restart dnf-automatic timer
+    - name: Configure dnf-automatic to apply updates
+      ansible.builtin.ini_file:
+        path: /etc/dnf/automatic.conf
+        section: commands
+        option: apply_updates
+        value: "yes"
+        mode: "0644"
+      notify: Restart dnf-automatic timer
 
-- name: Configure dnf-automatic to only install security updates
-  ansible.builtin.ini_file:
-    path: /etc/dnf/automatic.conf
-    section: commands
-    option: upgrade_type
-    value: security
-    mode: "0644"
-  notify: Restart dnf-automatic timer
+    - name: Configure dnf-automatic to only install security updates
+      ansible.builtin.ini_file:
+        path: /etc/dnf/automatic.conf
+        section: commands
+        option: upgrade_type
+        value: security
+        mode: "0644"
+      notify: Restart dnf-automatic timer
 
-- name: Configure dnf-automatic reboot policy
-  ansible.builtin.ini_file:
-    path: /etc/dnf/automatic.conf
-    section: commands
-    option: reboot
-    value: "{{ 'when-needed' if automatic_updates_reboot | bool else 'never' }}"
-    mode: "0644"
-  notify: Restart dnf-automatic timer
+    - name: Configure dnf-automatic reboot policy
+      ansible.builtin.ini_file:
+        path: /etc/dnf/automatic.conf
+        section: commands
+        option: reboot
+        value: "{{ 'when-needed' if automatic_updates_reboot | bool else 'never' }}"
+        mode: "0644"
+      notify: Restart dnf-automatic timer
 
-- name: Enable and start dnf-automatic timer
-  ansible.builtin.systemd_service:
-    name: dnf-automatic.timer
-    enabled: true
-    state: started
+    - name: Enable and start dnf-automatic timer
+      ansible.builtin.systemd_service:
+        name: dnf-automatic.timer
+        enabled: true
+        state: started
+
+- name: Remove dnf-automatic
+  when: not automatic_updates_enabled | bool
+  block:
+    - name: Check whether dnf-automatic timer unit exists
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - --property=LoadState
+          - --value
+          - dnf-automatic.timer
+      register: automatic_updates_dnf_timer_state
+      changed_when: false
+      failed_when: false
+      when: ansible_facts['service_mgr'] == 'systemd'
+
+    - name: Disable dnf-automatic timer when present
+      ansible.builtin.systemd_service:
+        name: dnf-automatic.timer
+        enabled: false
+        state: stopped
+      when:
+        - ansible_facts['service_mgr'] == 'systemd'
+        - automatic_updates_dnf_timer_state is defined
+        - automatic_updates_dnf_timer_state.rc == 0
+        - automatic_updates_dnf_timer_state.stdout | trim != 'not-found'
+
+    - name: Remove dnf-automatic configuration
+      ansible.builtin.file:
+        path: /etc/dnf/automatic.conf
+        state: absent
+
+    - name: Remove dnf-automatic package
+      ansible.builtin.package:
+        name: dnf-automatic
+        state: absent
