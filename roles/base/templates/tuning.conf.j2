@@ -16,5 +16,8 @@ net.ipv4.tcp_keepalive_probes = 6
 # widen the ephemeral port range for outbound fanout
 net.ipv4.ip_local_port_range = 8192 65535
 
+# cap the established connection listen backlog for busy services
+net.core.somaxconn = 4096
+
 # allow a larger pending SYN queue on busy internet-facing hosts
 net.ipv4.tcp_max_syn_backlog = 4096
