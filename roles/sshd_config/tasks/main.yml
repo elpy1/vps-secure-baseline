@@ -52,6 +52,14 @@
     - sshd_socket_unit_state.rc == 0
     - sshd_socket_unit_state.stdout | trim != 'not-found'
 
+- name: Ensure SSH service is enabled and started
+  ansible.builtin.systemd_service:
+    name: "{{ sshd_service_name }}"
+    enabled: true
+    state: started
+  register: sshd_service_ensure_result
+  when: ansible_facts['service_mgr'] == 'systemd'
+
 - name: Check for a managed SELinux SSH port marker
   ansible.builtin.stat:
     path: "{{ sshd_selinux_managed_port_marker_path }}"
@@ -235,6 +243,7 @@
           (
             (sshd_service_direct_result is defined and sshd_service_direct_result.changed)
             or (sshd_socket_disable_result is defined and sshd_socket_disable_result.changed)
+            or (sshd_service_ensure_result is defined and sshd_service_ensure_result.changed)
           )
           and (
             sshd_port | string

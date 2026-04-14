@@ -88,8 +88,10 @@ established host if you have not reviewed and adapted the variables first.
    On Debian-family hosts, `firewall_allowed_services` is not supported.
 
    On Debian-family hosts, the UFW backend rebuilds the managed ruleset
-   when the desired policies, allowed port lists, or managed IPv6 setting
-   change so removed ports are converged too. By default it also manages
+   when the declared policies, allowed port lists, or managed IPv6 setting
+   change so removed declared ports are converged too. This is intentionally
+   bootstrap-oriented: runs where the declared state is unchanged do not
+   currently scrub unrelated manual UFW additions. By default it also manages
    `/etc/default/ufw` `IPV6=` explicitly based on detected default IPv6
    connectivity; override `firewall_ufw_ipv6` if needed. It currently
    requires `firewall_default_outgoing_policy: allow`, because the baseline
@@ -130,13 +132,14 @@ established host if you have not reviewed and adapted the variables first.
 - The playbook runs with `become: true` by default, but it can also be used during bootstrap as `root` with `ansible_become: false`.
 - Installed distro packages are upgraded on every playbook run while `base_upgrade_installed_packages: true`, after the initial firewall/SSH safety steps and time synchronization checks but before the remaining baseline config is applied. Disable it if you need to manage package upgrades separately.
 - Debian-family automatic updates are explicitly limited to security origins. On Ubuntu, this can leave some security-related updates pending if they require new dependencies from the non-security release pocket.
+- On both distro families, `automatic_updates_reboot: true` means automatic reboots only when the platform reports one is needed to complete applied updates. The default `false` means never reboot automatically.
 - On older Rocky Linux / AlmaLinux images, the initial package sync may erase obsolete legacy packages such as `network-scripts` so the host can move to the current package set cleanly.
 - On Rocky Linux / AlmaLinux hosts, the baseline ensures `NetworkManager` is installed and enabled before that initial package sync.
 - On Rocky Linux / AlmaLinux hosts, the firewall role reconciles the selected firewalld zone more explicitly: it requires an explicit interface binding target, manages the zone target, removes stale ports/services from that zone, reloads firewalld to collapse runtime-only drift, and currently requires `firewall_default_outgoing_policy: allow`.
 - Time synchronization is managed explicitly and must report synchronized before the play continues. The baseline uses `chrony` on Rocky Linux / AlmaLinux hosts and `systemd-timesyncd` on Debian-family hosts.
 - The security sysctl drop-in disables source routing and ICMP redirects, enables IPv4 reverse-path filtering, restricts unprivileged `dmesg`, and enables Yama restricted ptrace where supported. On hosts with Yama enabled, attaching `strace` or `gdb` to an unrelated same-UID process may require `sudo`.
 - When changing `sshd_port`, the play asserts the final firewall policy permits that port, temporarily keeps the current Ansible SSH port open, reconnects Ansible on the new port, and only then removes the transitional port allowance.
-- On Debian-family systemd hosts, the SSH role disables `ssh.socket` and manages `ssh.service` directly so `sshd_port` changes are authoritative even on images that default to socket activation.
+- The SSH role explicitly enables and starts the SSH service on supported distros. On Debian-family systemd hosts, it also disables `ssh.socket` and manages `ssh.service` directly so `sshd_port` changes are authoritative even on images that default to socket activation.
 - On SELinux-enabled Rocky Linux / AlmaLinux hosts, non-default SSH ports are added to the SELinux `ssh_port_t` policy, and only the last custom SSH SELinux port previously managed by this repo is removed again when `sshd_port` changes.
 - `zram_enabled` and `automatic_updates_enabled` currently control whether those roles run on future plays. Setting them to `false` does not remove zram or automatic update configuration that a previous run already applied.
 - SSH password auth is disabled by default, so ensure key-based access is working before applying it.
